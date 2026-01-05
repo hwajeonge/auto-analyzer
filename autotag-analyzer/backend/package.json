@@ -1,0 +1,12 @@
+{
+  "name": "autotag-backend",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.0",
+    "cors": "^2.8.5",
+    "playwright": "^1.43.0"
+  }
+}
