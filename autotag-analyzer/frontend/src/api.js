@@ -35,3 +35,65 @@ export async function analyzeUrl(url) {
         buttons: Array.isArray(data.buttons) ? data.buttons : []
     };
 }
+
+// 실시간 스트리밍 분석
+export async function analyzeUrlStream(url, onEvent) {
+    const res = await fetch("http://localhost:4000/analyze-stream", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({url})
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "스트리밍 분석 실패");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+                break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+            
+            // SSE 메시지 파싱
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || ''; // 마지막 불완전한 메시지는 버퍼에 보관
+
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                
+                let eventType = 'message';
+                let dataStr = '';
+
+                for (const part of line.split('\n')) {
+                    if (part.startsWith('event: ')) {
+                        eventType = part.substring(7);
+                    } else if (part.startsWith('data: ')) {
+                        dataStr = part.substring(6);
+                    }
+                }
+
+                if (dataStr) {
+                    try {
+                        const data = JSON.parse(dataStr);
+                        onEvent(eventType, data);
+                    } catch (e) {
+                        console.error('SSE 데이터 파싱 오류:', e, dataStr);
+                    }
+                }
+            }
+        }
+    } finally {
+        reader.releaseLock();
+    }
+}
